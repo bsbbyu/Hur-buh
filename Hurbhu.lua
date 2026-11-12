@@ -1,83 +1,274 @@
 -- ==========================================
--- KEREN HUB - OFFICE WORKER (GITHUB WINDUI EDITION)
+-- KEREN HUB - OFFICE WORKER (NATIVE UI VERSION)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Load WindUI Library resmi dari GitHub
-local success, WindUI = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/main.lua"))()
-end)
-
-if not success or not WindUI then
-    warn("[Keren Hub] Gagal memuat WindUI dari GitHub! Menggunakan fallback UI.")
-    return
+-- Bersihkan UI lama jika ada
+if PlayerGui:FindFirstChild("KerenHubOfficeNative") then
+    PlayerGui.KerenHubOfficeNative:Destroy()
+end
+if PlayerGui:FindFirstChild("KHubAutoOfficeOverlay") then
+    PlayerGui.KHubAutoOfficeOverlay:Destroy()
 end
 
--- Buat Window Utama WindUI
-local Window = WindUI:CreateWindow({
-    Title = "Keren Hub • Office Worker",
-    Icon = "briefcase",
-    Author = "Auto Farm System",
-    Folder = "KerenHubConfig",
-    Size = UDim2.fromOffset(450, 300),
-    Transparent = true,
-    Theme = "Dark",
-    SideBarWidth = 140,
-    HasOutline = true,
-})
+-- ==========================================
+-- MEMBUAT CUSTOM NATIVE UI (FLOATING WINDOW)
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "KerenHubOfficeNative"
+ScreenGui.Parent = PlayerGui
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Buat Tab Menu
-local MainTab = Window:Tab({
-    Title = "Auto Farm",
-    Icon = "home",
-})
+local MainFrame = Instance.new("Frame")
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+MainFrame.Position = UDim2.new(0.5, -125, 0.3, 0)
+MainFrame.Size = UDim2.new(0, 250, 0, 210)
+MainFrame.Active = true
+MainFrame.Draggable = true -- Bisa digeser-geser pakai jempol/mouse!
 
--- Section Status & Informasi
-local StatusSection = MainTab:Section({
-    Title = "Status Monitor",
-    Content = "Sistem otomatis kantor Drag Drive Simulator.",
-})
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = MainFrame
 
-local StatusParagraph = StatusSection:Paragraph({
-    Title = "Current Status",
-    Desc = "Status: Standby (Mati 🔴)",
-})
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(60, 60, 80)
+UIStroke.Thickness = 2
+UIStroke.Parent = MainFrame
+
+-- Judul UI
+local Title = Instance.new("TextLabel")
+Title.Parent = MainFrame
+Title.BackgroundTransparency = 1
+Title.Position = UDim2.new(0, 0, 0, 10)
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "💼 Keren Hub • Office"
+Title.TextColor3 = Color3.fromRGB(240, 240, 255)
+Title.TextSize = 14
+
+-- Status Text
+local StatusText = Instance.new("TextLabel")
+StatusText.Parent = MainFrame
+StatusText.BackgroundTransparency = 1
+StatusText.Position = UDim2.new(0, 0, 0, 38)
+StatusText.Size = UDim2.new(1, 0, 0, 20)
+StatusText.Font = Enum.Font.GothamMedium
+StatusText.Text = "Status: Standby 🔴"
+StatusText.TextColor3 = Color3.fromRGB(180, 180, 200)
+StatusText.TextSize = 11
+
+-- Tombol Toggle Auto Farm
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Parent = MainFrame
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(210, 45, 45)
+ToggleBtn.Position = UDim2.new(0.1, 0, 0, 68)
+ToggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.Text = "AUTO FARM: OFF"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.TextSize = 12
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 8)
+ToggleCorner.Parent = ToggleBtn
+
+-- Tombol Toggle Black Screen
+local BlackScreenBtn = Instance.new("TextButton")
+BlackScreenBtn.Parent = MainFrame
+BlackScreenBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+BlackScreenBtn.Position = UDim2.new(0.1, 0, 0, 115)
+BlackScreenBtn.Size = UDim2.new(0.8, 0, 0, 35)
+BlackScreenBtn.Font = Enum.Font.GothamBold
+BlackScreenBtn.Text = "BLACK SCREEN: OFF"
+BlackScreenBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+BlackScreenBtn.TextSize = 11
+
+local BsCorner = Instance.new("UICorner")
+BsCorner.CornerRadius = UDim.new(0, 8)
+BsCorner.Parent = BlackScreenBtn
+
+-- Tombol Minimize / Hide UI sementara
+local HideBtn = Instance.new("TextButton")
+HideBtn.Parent = MainFrame
+HideBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+HideBtn.Position = UDim2.new(0.1, 0, 0, 158)
+HideBtn.Size = UDim2.new(0.8, 0, 0, 32)
+HideBtn.Font = Enum.Font.GothamBold
+HideBtn.Text = "CLOSE UI (RELOAD SHIFT)"
+HideBtn.TextColor3 = Color3.fromRGB(170, 170, 170)
+HideBtn.TextSize = 10
+
+local HideCorner = Instance.new("UICorner")
+HideCorner.CornerRadius = UDim.new(0, 8)
+HideCorner.Parent = HideBtn
 
 -- ==========================================
--- LOGIC AUTO-FARM OFFICE WORKER
+-- VARIABEL LOGIKA AUTO FARM & SOLVER
 -- ==========================================
 local AutoOfficeEnabled = false
+local BlackScreenEnabled = false
+local NoclipEnabled = false
+local AntiAfkEnabled = true
+
 local JobEvents = ReplicatedStorage:WaitForChild("JobEvents")
 local ComputersFolder = Workspace:WaitForChild("Computers")
 local CurrentTargetComputer = nil
 
--- Dengerin event printer dari server
+local CorrectAnswerEvent = JobEvents:WaitForChild("CorrectAnswer")
+local GenerateQuestionEvent = JobEvents:WaitForChild("GenerateQuestion")
+local farmThread = nil
+
+-- ==========================================
+-- FUNGSI OVERLAY HITAM PEKAT
+-- ==========================================
+local function showOverlay()
+    pcall(function()
+        if not BlackScreenEnabled then return end
+        if PlayerGui:FindFirstChild("KHubAutoOfficeOverlay") then return end
+        
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "KHubAutoOfficeOverlay"
+        screenGui.Parent = PlayerGui
+        screenGui.IgnoreGuiInset = true
+        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+        local bgFrame = Instance.new("Frame")
+        bgFrame.Size = UDim2.new(1, 0, 1, 0)
+        bgFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        bgFrame.BackgroundTransparency = 0
+        bgFrame.Parent = screenGui
+
+        local centerContainer = Instance.new("Frame")
+        centerContainer.Size = UDim2.new(0, 300, 0, 200)
+        centerContainer.Position = UDim2.new(0.5, -150, 0.5, -100)
+        centerContainer.BackgroundTransparency = 1
+        centerContainer.Parent = bgFrame
+
+        local logoBox = Instance.new("Frame")
+        logoBox.Size = UDim2.new(0, 80, 0, 80)
+        logoBox.Position = UDim2.new(0.5, -40, 0, 10)
+        logoBox.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+        logoBox.BorderColor3 = Color3.fromRGB(255, 255, 255)
+        logoBox.BorderSizePixel = 2
+        logoBox.Parent = centerContainer
+
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, 12)
+        c.Parent = logoBox
+
+        local logoText = Instance.new("TextLabel")
+        logoText.Size = UDim2.new(1, 0, 1, 0)
+        logoText.BackgroundTransparency = 1
+        logoText.Text = "K"
+        logoText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        logoText.TextSize = 45
+        logoText.Font = Enum.Font.GothamBold
+        logoText.Parent = logoBox
+
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Size = UDim2.new(1, 0, 0, 30)
+        titleLabel.Position = UDim2.new(0, 0, 0, 100)
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Text = "Keren Hub"
+        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        titleLabel.TextSize = 22
+        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.Parent = centerContainer
+
+        local statusLabel = Instance.new("TextLabel")
+        statusLabel.Size = UDim2.new(1, 0, 0, 20)
+        statusLabel.Position = UDim2.new(0, 0, 0, 135)
+        statusLabel.BackgroundTransparency = 1
+        statusLabel.Text = "Office Worker Auto-Farm Running..."
+        statusLabel.TextColor3 = Color3.fromRGB(170, 170, 170)
+        statusLabel.TextSize = 12
+        statusLabel.Font = Enum.Font.GothamMedium
+        statusLabel.Parent = centerContainer
+    end)
+end
+
+local function hideOverlay()
+    pcall(function()
+        if PlayerGui:FindFirstChild("KHubAutoOfficeOverlay") then
+            PlayerGui.KHubAutoOfficeOverlay:Destroy()
+        end
+    end)
+end
+
+-- ==========================================
+-- EVENT LISTENER & MATH SOLVER
+-- ==========================================
 JobEvents:WaitForChild("AssignPrintJob").OnClientEvent:Connect(function(computerName)
     CurrentTargetComputer = computerName
-    StatusParagraph:SetDesc("Status: Menuju ke " .. tostring(computerName))
+    if AutoOfficeEnabled then
+        StatusText.Text = "Target: " .. tostring(computerName)
+    end
 end)
 
 JobEvents:WaitForChild("ClearPrintJob").OnClientEvent:Connect(function()
     CurrentTargetComputer = nil
-    StatusParagraph:SetDesc("Status: Tugas Selesai, Menunggu Print Baru...")
+    if AutoOfficeEnabled then
+        StatusText.Text = "Status: Selesai 🟢"
+    end
 end)
 
--- Anti-AFK
-task.spawn(function()
-    LocalPlayer.Idled:Connect(function()
-        VirtualUser:Button2Down(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        VirtualUser:Button2Up(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
+-- Auto-Solver Penjumlahan Matematika
+GenerateQuestionEvent.OnClientEvent:Connect(function(questionText, options, questionID)
+    if not AutoOfficeEnabled then return end
+    task.wait(0.3)
+    
+    pcall(function()
+        local cleanExpr = questionText:gsub("=.*", ""):gsub("[^%d%+%-*%/%(%)]", "")
+        local mathFunc = loadstring("return " .. cleanExpr)
+        if not mathFunc then return end
+        local correctAnswerValue = tostring(mathFunc())
+        
+        for _, opt in ipairs(options) do
+            local optClean = tostring(opt.Text):gsub("%D", "")
+            if optClean == correctAnswerValue or tostring(opt.Text) == correctAnswerValue then
+                CorrectAnswerEvent:FireServer(opt.ID, questionID)
+                StatusText.Text = "Soal Terjawab! 🧮"
+                break
+            end
+        end
     end)
 end)
 
--- Join Team Office Worker
+-- Noclip & Anti-AFK Loop
+RunService.Stepped:Connect(function()
+    if NoclipEnabled then
+        local char = LocalPlayer.Character
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    LocalPlayer.Idled:Connect(function()
+        if AntiAfkEnabled then
+            VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+        end
+    end)
+end)
+
 local function selectOfficeJob()
     pcall(function()
         local TeamChange = JobEvents:FindFirstChild("TeamChangeRequest")
@@ -88,19 +279,16 @@ local function selectOfficeJob()
     end)
 end
 
--- Teleport halus langsung ke depan part printer (Biar anti nyangkut jalan)
 local function teleportToPart(targetPart)
     pcall(function()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp or not targetPart then return end
-
         hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
         task.wait(0.3)
     end)
 end
 
--- Interaksi ProximityPrompt Natural
 local function interactPrompt(prompt)
     if not prompt then return end
     local holdTime = prompt.HoldDuration or 0
@@ -115,13 +303,20 @@ local function interactPrompt(prompt)
     end
 end
 
--- MAIN LOOP AUTO FARM
-task.spawn(function()
-    while true do
-        if AutoOfficeEnabled then
+-- ==========================================
+-- MAIN FARM LOOP
+-- ==========================================
+local function startFarmLoop()
+    if farmThread then task.cancel(farmThread) end
+    
+    farmThread = task.spawn(function()
+        while true do
+            task.wait(1)
+            if not AutoOfficeEnabled then break end
+
             pcall(function()
                 if not (LocalPlayer.Team and LocalPlayer.Team.Name == "Office Worker") then
-                    StatusParagraph:SetDesc("Status: Masuk ke Tim Office Worker...")
+                    StatusText.Text = "Masuk Tim Kantor..."
                     selectOfficeJob()
                 end
 
@@ -131,44 +326,63 @@ task.spawn(function()
                         local targetPart = targetModel.Part
                         local prompt = targetPart:FindFirstChildOfClass("ProximityPrompt")
 
-                        StatusParagraph:SetDesc("Status: Teleport ke " .. CurrentTargetComputer)
+                        StatusText.Text = "Teleport ke Printer..."
                         teleportToPart(targetPart)
                         task.wait(0.5)
                         
                         if prompt then
-                            StatusParagraph:SetDesc("Status: Memproses Dokumen Printer...")
                             interactPrompt(prompt)
                         end
                     end
                 else
-                    StatusParagraph:SetDesc("Status: Standby Menunggu Job Printer...")
+                    StatusText.Text = "Mencari Tugas..."
                 end
             end)
-        else
-            StatusParagraph:SetDesc("Status: Standby (Mati 🔴)")
         end
-        task.wait(1)
     end)
-end)
+end
 
--- Tombol Toggle WindUI
-MainTab:Toggle({
-    Title = "Auto Farm Office",
-    Desc = "Otomatis ambil tugas print & teleport interaksi",
-    Value = false,
-    Callback = function(state)
-        AutoOfficeEnabled = state
-        if AutoOfficeEnabled then
-            StatusParagraph:SetDesc("Status: Auto Farm Aktif 🟢")
-        else
-            StatusParagraph:SetDesc("Status: Dimatikan Manual 🔴")
+-- ==========================================
+-- TOMBOL INTERAKSI UI
+-- ==========================================
+ToggleBtn.MouseButton1Click:Connect(function()
+    AutoOfficeEnabled = not AutoOfficeEnabled
+    NoclipEnabled = AutoOfficeEnabled
+    
+    if AutoOfficeEnabled then
+        ToggleBtn.Text = "AUTO FARM: ON"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(45, 200, 95)
+        StatusText.Text = "Status: Aktif 🟢"
+        showOverlay()
+        startFarmLoop()
+    else
+        ToggleBtn.Text = "AUTO FARM: OFF"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(210, 45, 45)
+        StatusText.Text = "Status: Standby 🔴"
+        hideOverlay()
+        if farmThread then
+            task.cancel(farmThread)
+            farmThread = nil
         end
     end
-})
+end)
 
--- Notifikasi Berhasil Load
-WindUI:Notify({
-    Title = "Keren Hub Loaded",
-    Content = "Office Worker WindUI berhasil dimuat!",
-    Duration = 3
-})
+BlackScreenBtn.MouseButton1Click:Connect(function()
+    BlackScreenEnabled = not BlackScreenEnabled
+    if BlackScreenEnabled then
+        BlackScreenBtn.Text = "BLACK SCREEN: ON"
+        BlackScreenBtn.BackgroundColor3 = Color3.fromRGB(45, 140, 200)
+        if AutoOfficeEnabled then showOverlay() end
+    else
+        BlackScreenBtn.Text = "BLACK SCREEN: OFF"
+        BlackScreenBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+        hideOverlay()
+    end
+end)
+
+HideBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+    hideOverlay()
+end)
+
+print("[Keren Hub] Native Custom UI Loaded Successfully!")
