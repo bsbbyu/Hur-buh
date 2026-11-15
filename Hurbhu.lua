@@ -1,173 +1,126 @@
 -- ==========================================
--- KEREN HUB - OFFICE WORKER FULL AUTO (JOB + SOLVE + MOVE)
+-- KEREN HUB - OFFICE WORKER ULTIMATE BOT (FINAL SYNC TARGET)
 -- ==========================================
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Workspace = game:GetService("Workspace")
 
-local AutoFarmActive = true
-local isWorking = false
+local JobEvents = ReplicatedStorage:WaitForChild("JobEvents")
+local CorrectAnswer = JobEvents:WaitForChild("CorrectAnswer")
+local GenerateQuestion = JobEvents:WaitForChild("GenerateQuestion")
+local AssignPrintJob = JobEvents:WaitForChild("AssignPrintJob")
+local ClearPrintJob = JobEvents:WaitForChild("ClearPrintJob")
+local ComputersFolder = Workspace:WaitForChild("Computers")
 
--- Fungsi cari kursi terdekat buat duduk balik
-local function sitOnNearestChair()
+local AutoBotActive = true
+local questionCounter = 0
+
+print("[Keren Hub] Ultimate Office Bot (Synced Target Mode) Loaded!")
+
+-- Fungsi utama lari ke printer berdasarkan target yang dikirim server
+local function goToTargetPrinter(targetPrinterObj)
     pcall(function()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
-        -- Kalau sudah duduk, jangan dipaksa duduk lagi
-        if humanoid.SeatPart then return end
+        -- 1. Berdiri / lompat dulu dari kursi
+        if humanoid.SeatPart then
+            humanoid.Sit = false
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            task.wait(0.3)
+        end
 
-        local closestSeat = nil
-        local shortestDist = math.huge
+        local targetPart = nil
+        local targetPrompt = nil
 
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if (obj:IsA("Seat") or obj:IsA("VehicleSeat")) and obj.Occupant == nil then
-                local dist = (hrp.Position - obj.Position).Magnitude
-                if dist < shortestDist and dist < 25 then -- Radius 25 stud cari kursi sekitar meja
-                    shortestDist = dist
-                    closestSeat = obj
-                end
+        -- Jika server ngirim objek printer langsung
+        if typeof(targetPrinterObj) == "Instance" then
+            targetPart = targetPrinterObj:FindFirstChild("Part") or targetPrinterObj:FindFirstChildOfClass("BasePart")
+            targetPrompt = targetPrinterObj:FindFirstChildOfClass("ProximityPrompt", true)
+        elseif typeof(targetPrinterObj) == "number" or typeof(targetPrinterObj) == "string" then
+            -- Kalau server ngirim angka/nama (misal "Print_2" atau angka 2)
+            local printerModel = ComputersFolder:FindFirstChild("Print_" .. tostring(targetPrinterObj))
+            if printerModel then
+                targetPart = printerModel:FindFirstChild("Part") or printerModel:FindFirstChildOfClass("BasePart")
+                targetPrompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
             end
         end
 
-        if closestSeat then
-            hrp.CFrame = closestSeat.CFrame + Vector3.new(0, 2, 0)
-            task.wait(0.4)
-            closestSeat:Sit(humanoid)
-            print("[Keren Hub] Kembali duduk di kursi terdekat!")
-        end
-    end)
-end
-
--- Fungsi jalan / tween ke printer / komputer tujuan
-local function walkToPrinter()
-    pcall(function()
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        -- Cari objek Printer / Komputer di Workspace (sesuaikan folder game jika ada)
-        local computersFolder = Workspace:FindFirstChild("Computers") or Workspace:FindFirstChild("Printers")
-        if not computersFolder then
-            -- Kalau foldernya gak ketemu, cari part interaktif di workspace
-            for _, obj in ipairs(Workspace:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") and (obj.Parent.Name:lower():find("printer") or obj.Parent.Name:lower():find("computer")) then
-                    hrp.CFrame = obj.Parent.CFrame + Vector3.new(0, 3, 0)
-                    task.wait(0.5)
-                    fireproximityprompt(obj)
-                    return
-                end
+        -- Kalau target dari server valid, langsung teleport & interaksi
+        if targetPart then
+            hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+            task.wait(0.3)
+            if targetPrompt then
+                fireproximityprompt(targetPrompt)
             end
-            return
-        end
-
-        -- Kalau foldernya ada, datengin satu-satu yang ada prompt-nya
-        for _, comp in ipairs(computersFolder:GetChildren()) do
-            local part = comp:FindFirstChild("Part") or comp:FindFirstChildOfClass("BasePart")
-            local prompt = comp:FindFirstChildOfClass("ProximityPrompt", true)
-            
-            if part then
-                hrp.CFrame = part.CFrame + Vector3.new(0, 3, 0)
-                task.wait(0.5)
-                if prompt then
-                    fireproximityprompt(prompt)
+            print("[Keren Hub] Sukses sampai di printer tujuan dari server!")
+        else
+            -- Fallback darurat: kalau argumen kosong, cari printer yang prompt-nya aktif
+            print("[Keren Hub] Mencari printer aktif alternatif...")
+            for i = 1, 5 do
+                local pModel = ComputersFolder:FindFirstChild("Print_" .. i)
+                if pModel then
+                    local pPart = pModel:FindFirstChild("Part") or pModel:FindFirstChildOfClass("BasePart")
+                    local pPrompt = pModel:FindFirstChildOfClass("ProximityPrompt", true)
+                    if pPart and pPrompt then
+                        hrp.CFrame = pPart.CFrame + Vector3.new(0, 3, 0)
+                        task.wait(0.2)
+                        fireproximityprompt(pPrompt)
+                        break
+                    end
                 end
-                break
             end
         end
     end)
 end
 
--- Fungsi Utama Baca Soal & Jawab
-local function solveOfficeTask()
+-- 1. AUTO SOLVER MATEMATIKA + COUNTER 6 KALI SOAL
+GenerateQuestion.OnClientEvent:Connect(function(questionText, optionsList, sessionID)
+    if not AutoBotActive then return end
+    
+    task.wait(math.random(8, 12) / 10)
+    
     pcall(function()
-        local workGui = PlayerGui:FindFirstChild("WorkGui")
-        if not workGui then 
-            -- Kalau WorkGui ilang (lagi gak ngerjain soal), pastikan balik duduk
-            isWorking = false
-            sitOnNearestChair()
-            return 
-        end
-
-        isWorking = true
-
-        -- 1. Baca soal dari QuestionLabel atau TextLabel
-        local questionLabel = workGui:FindFirstChild("QuestionLabel") or workGui:FindFirstChild("TextLabel")
-        if not questionLabel then return end
-
-        local rawText = questionLabel.Text
-        if not rawText or rawText == "" then return end
-
-        -- Pastikan hanya memproses soal penjumlahan atau pengurangan
-        if not (rawText:find("%+") or rawText:find("%-")) then return end
-
-        -- 2. Bersihkan teks dan hitung jawaban secara otomatis
-        local cleanExpr = rawText:gsub("=.*", ""):gsub("[^%d%+%-]", "")
+        local cleanExpr = questionText:gsub("=.*", ""):gsub("[^%d%+%-]", "")
         local mathFunc = loadstring("return " .. cleanExpr)
         if not mathFunc then return end
-
+        
         local success, result = pcall(mathFunc)
         if not success or not result then return end
         
-        local targetAnswer = tostring(result)
+        local targetVal = tostring(result)
+        local selectedButtonID = nil
 
-        -- Jeda manusia natural biar aman dari deteksi server
-        task.wait(math.random(8, 12) / 10)
+        for _, opt in ipairs(optionsList) do
+            local optNum = opt.Text:gsub("%D", "")
+            if optNum == targetVal or opt.Text == targetVal then
+                selectedButtonID = opt.ID
+                break
+            end
+        end
 
-        -- 3. Cari container Frame tempat AnswerButton berada
-        local frame = workGui:FindFirstChild("Frame")
-        if not frame then return end
+        if selectedButtonID then
+            CorrectAnswer:FireServer(selectedButtonID, sessionID)
+            questionCounter = questionCounter + 1
+            print("[Keren Hub] Jawab Soal ke-" .. questionCounter .. " -> " .. targetVal)
 
-        -- 4. Cari tombol yang cocok dan klik otomatis
-        for _, obj in ipairs(frame:GetChildren()) do
-            if obj.Name == "AnswerButton" or obj:IsA("TextButton") then
-                local btnText = ""
-                if obj:IsA("TextButton") then
-                    btnText = obj.Text
-                else
-                    local lbl = obj:FindFirstChildOfClass("TextLabel")
-                    if lbl then btnText = lbl.Text end
-                end
-
-                local cleanBtnText = btnText:gsub("%D", "")
-
-                if cleanBtnText == targetAnswer or btnText == targetAnswer then
-                    if obj:IsA("GuiButton") then
-                        if firesignal then
-                            firesignal(obj.MouseButton1Click)
-                            firesignal(obj.Activated)
-                        else
-                            obj:Activate()
-                        end
-                    end
-                    
-                    print("[Keren Hub] Sukses Jawab: " .. rawText .. " -> Jawaban: " + targetAnswer)
-                    task.wait(1.2)
-                    
-                    -- Sesudah selesai jawab, otomatis balik duduk sebentar nunggu soal berikutnya
-                    task.wait(1)
-                    sitOnNearestChair()
-                    break
-                end
+            -- Pas udah 6 kali jawab, kalau server nge-trigger event print otomatis
+            if questionCounter >= 6 then
+                print("[Keren Hub] Siklus 6 soal tercapai!")
+                questionCounter = 0
             end
         end
     end)
-end
-
--- Loop utama auto worker
-task.spawn(function()
-    while AutoFarmActive do
-        task.wait(1.5)
-        if not isWorking then
-            -- Kalau lagi gak ngerjain soal, cek apakah perlu jalan ke printer atau balik duduk
-            solveOfficeTask()
-        else
-            solveOfficeTask()
-        end
-    end
 end)
 
-print("[Keren Hub] Full Auto Walk & Solve Loaded!")
+-- 2. MENANGKAP EVENT PRINTER DARI SERVER BESERTA ARGUMENNYA
+AssignPrintJob.OnClientEvent:Connect(function(assignedTarget)
+    if not AutoBotActive then return end
+    questionCounter = 0
+    print("[Keren Hub] Tugas Print diterima dari server! Target:", assignedTarget)
+    task.wait(0.4)
+    goToTargetPrinter(assignedTarget)
+end)
