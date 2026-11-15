@@ -1,13 +1,13 @@
 -- ==========================================
--- KEREN HUB - ULTIMATE OFFICE BOT (PROXIMITY SCANNER)
+-- KEREN HUB - ULTIMATE OFFICE BOT (SMOOTH MOVEMENT + ATTACHMENT SCANNER)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PathfindingService = game:GetService("PathfindingService")
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Workspace = game:GetService("Workspace")
 
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local JobEvents = ReplicatedStorage:WaitForChild("JobEvents")
 local AssignPrintJob = JobEvents:WaitForChild("AssignPrintJob")
 local ComputersFolder = Workspace:WaitForChild("Computers")
@@ -23,9 +23,11 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
-print("[Keren Hub] Ultimate Office Bot (Proximity Scanner Mode) Loaded!")
+print("[Keren Hub] Ultimate Office Bot Loaded Successfully!")
 
--- Fungsi jalan ke printer berdasarkan ProximityPrompt yang aktif
+-- ==========================================
+-- FUNGSI JALAN KE PRINTER (HALUS / TIDAK PATAH-PATAH)
+-- ==========================================
 local function walkToActivePrinter()
     pcall(function()
         local char = LocalPlayer.Character
@@ -33,31 +35,33 @@ local function walkToActivePrinter()
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
-        -- 1. Berdiri / lompat dari kursi kantor
+        -- 1. Berdiri / lompat jika sedang duduk di kursi kantor
         if humanoid.SeatPart then
             humanoid.Sit = false
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             task.wait(0.6)
         end
 
-        print("[Keren Hub] Mencari printer dengan ProximityPrompt aktif...")
+        print("[Keren Hub] Memindai printer aktif berdasarkan Part.Attachment...")
 
-        local targetPrinterName = "Print_1"
-        local targetPos = PrinterCoordinates["Print_1"]
+        local targetPrinterName = nil
+        local targetPos = nil
         local targetPrompt = nil
 
-        -- 2. Scan Print_1 sampai Print_5 cari yang prompt-nya aktif / ada
+        -- 2. Scan Print_1 sampai Print_5 cari yang punya Part.Attachment & ProximityPrompt
         for i = 1, 5 do
             local pName = "Print_" .. i
             local printerModel = ComputersFolder:FindFirstChild(pName)
             if printerModel then
+                local part = printerModel:FindFirstChild("Part")
+                local attachment = part and part:FindFirstChild("Attachment")
                 local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
-                -- Cek apakah prompt ada dan aktif (Enabled)
-                if prompt and prompt.Enabled then
+
+                if attachment and prompt then
                     targetPrinterName = pName
                     targetPos = PrinterCoordinates[pName]
                     targetPrompt = prompt
-                    print("[Keren Hub] Ketemu target aktif di:", targetPrinterName)
+                    print("[Keren Hub] -> Target aktif ketemu via Attachment di:", targetPrinterName)
                     break
                 end
             end
@@ -66,7 +70,6 @@ local function walkToActivePrinter()
         if targetPos then
             print("[Keren Hub] Berjalan kaki menuju " .. targetPrinterName .. "...")
 
-            -- Pathfinding buat jalan normal pakai animasi
             local path = PathfindingService:CreatePath({
                 AgentRadius = 2,
                 AgentHeight = 5,
@@ -91,8 +94,9 @@ local function walkToActivePrinter()
                     end)
                     
                     local t = tick()
-                    while not reached and (tick() - t) < 1.5 do
-                        task.wait(0.1)
+                    -- Dipercepat dan dihaluskan per waypoint agar tidak kaku/patah-patah
+                    while not reached and (tick() - t) < 0.8 do
+                        task.wait(0.05)
                     end
                     if conn then conn:Disconnect() end
                 end
@@ -101,26 +105,29 @@ local function walkToActivePrinter()
                 task.wait(2)
             end
 
-            -- 3. Eksekusi interaksi pakai ProximityPrompt yang ketemu
+            -- 3. Eksekusi Interaksi ProximityPrompt
             task.wait(0.3)
-            if targetPrompt then
+            if targetPrompt and fireproximityprompt then
                 fireproximityprompt(targetPrompt)
             else
-                -- Fallback cari prompt di model printer tersebut kalau variabelnya kelewat
                 local printerModel = ComputersFolder:FindFirstChild(targetPrinterName)
                 if printerModel then
                     local fallbackPrompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
-                    if fallbackPrompt then
+                    if fallbackPrompt and fireproximityprompt then
                         fireproximityprompt(fallbackPrompt)
                     end
                 end
             end
             print("[Keren Hub] Selesai berinteraksi dengan " .. targetPrinterName .. "!")
+        else
+            print("[Keren Hub] Gagal menemukan printer dengan Attachment aktif saat ini.")
         end
     end)
 end
 
--- 1. FUNGSI AUTO SOLVER GUI (MATEMATIKA)
+-- ==========================================
+-- FUNGSI AUTO SOLVER GUI (MATEMATIKA)
+-- ==========================================
 local function solveOfficeTask()
     pcall(function()
         local workGui = PlayerGui:FindFirstChild("WorkGui")
@@ -170,7 +177,7 @@ local function solveOfficeTask()
                         end
                     end
                     
-                    print("[Keren Hub] Sukses Jawab Soal -> Jawaban: " + targetAnswer)
+                    print("[Keren Hub] Sukses Jawab Soal -> Jawaban:", targetAnswer)
                     task.wait(1.2)
                     break
                 end
@@ -179,7 +186,11 @@ local function solveOfficeTask()
     end)
 end
 
--- Loop utama auto worker matematika
+-- ==========================================
+-- LOOP & EVENT LISTENER UTAMA
+-- ==========================================
+
+-- Loop otomatis untuk menyelesaikan soal matematika di WorkGui
 task.spawn(function()
     while AutoFarmActive do
         task.wait(1)
@@ -187,10 +198,12 @@ task.spawn(function()
     end
 end)
 
--- 2. EVENT PENANGKAP PRINT JOB
+-- Listener Event dari Server (Memicu scan attachment saat tugas masuk)
 AssignPrintJob.OnClientEvent:Connect(function()
     if not AutoFarmActive then return end
-    print("[Keren Hub] Tugas Print diterima! Mencari printer berdasarkan ProximityPrompt...")
+    print("[Keren Hub] Tugas Print diterima! Memulai scan Part.Attachment...")
     task.wait(0.5)
     walkToActivePrinter()
 end)
+
+print("[Keren Hub] Ultimate Office Bot siap beraksi dengan gerakan halus!")
