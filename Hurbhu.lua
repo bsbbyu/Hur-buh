@@ -1,5 +1,5 @@
 -- ==========================================
--- KEREN HUB - ULTIMATE OFFICE BOT (WALKING MODE)
+-- KEREN HUB - ULTIMATE OFFICE BOT (PERFECT SYNC WALKING)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,7 +14,7 @@ local ComputersFolder = Workspace:WaitForChild("Computers")
 
 local AutoFarmActive = true
 
--- Data Koordinat Pasti Printer
+-- Data Koordinat Pasti Printer Sesuai Pilihan Lu
 local PrinterCoordinates = {
     ["Print_1"] = Vector3.new(-6008.849, 5.956, -210.805),
     ["Print_2"] = Vector3.new(-6008.840, 5.966, -224.522),
@@ -23,10 +23,10 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
-print("[Keren Hub] Ultimate Office Bot (Walking Mode) Loaded!")
+print("[Keren Hub] Ultimate Office Bot (Perfect Sync Mode) Loaded!")
 
--- Fungsi jalan kaki ke printer tujuan pakai Pathfinding
-local function walkToTargetPrinter(targetPrinterObj)
+-- Fungsi jalan kaki presisi berdasarkan target asli dari server
+local function walkToTargetPrinter(assignedTarget)
     pcall(function()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -37,57 +37,50 @@ local function walkToTargetPrinter(targetPrinterObj)
         if humanoid.SeatPart then
             humanoid.Sit = false
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            task.wait(0.6) -- Jeda agar benar-benar berdiri
+            task.wait(0.6)
         end
 
         local printerName = ""
-        
-        -- Deteksi nama printer dari server
-        if typeof(targetPrinterObj) == "Instance" then
-            printerName = targetPrinterObj.Name
-        elseif typeof(targetPrinterObj) == "number" or typeof(targetPrinterObj) == "string" then
-            printerName = "Print_" .. tostring(targetPrinterObj)
+
+        -- Terjemahkan data mentah dari server secara akurat
+        if typeof(assignedTarget) == "Instance" then
+            printerName = assignedTarget.Name
+        elseif typeof(assignedTarget) == "number" or typeof(assignedTarget) == "string" then
+            -- Kalau server ngirim angka (misal 3) atau string ("Print_3" atau "3")
+            local cleanName = tostring(assignedTarget):gsub("Print_", "")
+            printerName = "Print_" .. cleanName
         end
 
         local targetPos = PrinterCoordinates[printerName]
 
-        -- Fallback jika target kosong
+        -- Jika nama printer gagal dikenali, ambil default Print_1
         if not targetPos then
-            print("[Keren Hub] Target server tidak valid, mencari printer terdekat untuk didatangi...")
-            local shortestDist = math.huge
-            for name, pos in pairs(PrinterCoordinates) do
-                local dist = (hrp.Position - pos).Magnitude
-                if dist < shortestDist then
-                    shortestDist = dist
-                    targetPos = pos
-                    printerName = name
-                end
-            end
+            printerName = "Print_1"
+            targetPos = PrinterCoordinates[printerName]
         end
+
+        print("[Keren Hub] Target Printer Valid dari Server:", printerName)
 
         if targetPos then
             print("[Keren Hub] Berjalan kaki menuju " .. printerName .. "...")
 
-            -- Buat path menggunakan PathfindingService agar karakter jalan normal
+            -- Buat path pakai PathfindingService biar jalan normal ada animasinya
             local path = PathfindingService:CreatePath({
                 AgentRadius = 2,
                 AgentHeight = 5,
                 AgentCanJump = true
             })
 
-            path:ComputeAsync(hrp.Position, targetPos + Vector3.new(0, 0, 2)) -- Berhenti sedikit di depan printer
+            path:ComputeAsync(hrp.Position, targetPos + Vector3.new(0, 0, 2))
             
             if path.Status == Enum.PathStatus.Success then
                 local waypoints = path:GetWaypoints()
                 for _, waypoint in ipairs(waypoints) do
                     humanoid:MoveTo(waypoint.Position)
-                    
-                    -- Jika waypoint butuh lompat
                     if waypoint.Action == Enum.PathWaypointAction.Jump then
                         humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
                     end
                     
-                    -- Tunggu sampai karakter sampai di waypoint tersebut
                     local reached = false
                     local conn
                     conn = humanoid.MoveToFinished:Connect(function(isReached)
@@ -95,7 +88,6 @@ local function walkToTargetPrinter(targetPrinterObj)
                         if conn then conn:Disconnect() end
                     end)
                     
-                    -- Timeout maks 1.5 detik per waypoint biar nggak stuck
                     local t = tick()
                     while not reached and (tick() - t) < 1.5 do
                         task.wait(0.1)
@@ -103,7 +95,7 @@ local function walkToTargetPrinter(targetPrinterObj)
                     if conn then conn:Disconnect() end
                 end
             else
-                -- Fallback kalau pathfinding gagal: suruh humanoid jalan manual lurus biasa
+                -- Fallback kalau pathfinding mentok: jalan lurus manual
                 humanoid:MoveTo(targetPos)
                 task.wait(2)
             end
@@ -172,7 +164,7 @@ local function solveOfficeTask()
                         end
                     end
                     
-                    print("[Keren Hub] Sukses Jawab Soal -> Jawaban: " + targetAnswer)
+                    print("[Keren Hub] Sukses Jawab Soal -> Jawaban: " .. targetAnswer)
                     task.wait(1.2)
                     break
                 end
@@ -189,10 +181,10 @@ task.spawn(function()
     end
 end)
 
--- 2. EVENT PENANGKAP PRINTER DARI SERVER
+-- 2. EVENT PENANGKAP PRINTER DARI SERVER (YANG UDAH PAS DETEKSINYA)
 AssignPrintJob.OnClientEvent:Connect(function(assignedTarget)
     if not AutoFarmActive then return end
-    print("[Keren Hub] Tugas Print diterima! Berjalan menuju printer...")
+    print("[Keren Hub] Tugas Print diterima dari server! Target:", assignedTarget)
     task.wait(0.5)
     walkToTargetPrinter(assignedTarget)
 end)
