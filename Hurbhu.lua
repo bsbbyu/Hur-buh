@@ -1,5 +1,5 @@
 -- ==========================================
--- KEREN HUB - ULTIMATE OFFICE BOT (CLEAN & FINAL)
+-- KEREN HUB - ULTIMATE OFFICE BOT (STATUS LOG EDITION)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,10 +23,13 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
+print("==========================================")
 print("[Keren Hub] Ultimate Office Bot Active!")
+print("[Keren Hub] Status: Semua sistem siap memantau.")
+print("==========================================")
 
 -- ==========================================
--- FUNGSI JALAN KE PRINTER (HALUS & SCAN ATTACHMENT)
+-- FUNGSI JALAN KE PRINTER (DENGAN STATUS LOG)
 -- ==========================================
 local function walkToActivePrinter()
     pcall(function()
@@ -44,32 +47,55 @@ local function walkToActivePrinter()
         local targetPrinterName = nil
         local targetPos = nil
         local targetPrompt = nil
+        local totalEnabled = 0
 
+        -- Hitung berapa printer yang prompt-nya Enabled (nyala)
         for i = 1, 5 do
             local pName = "Print_" .. i
             local printerModel = ComputersFolder:FindFirstChild(pName)
             if printerModel then
-                local part = printerModel:FindFirstChild("Part")
-                local attachment = part and part:FindFirstChild("Attachment")
                 local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
-
-                if attachment and prompt then
-                    targetPrinterName = pName
-                    targetPos = PrinterCoordinates[pName]
-                    targetPrompt = prompt
-                    break
+                if prompt and prompt.Enabled then
+                    totalEnabled = totalEnabled + 1
                 end
             end
         end
 
-        if targetPos then
+        -- LOGIKA STATUS:
+        if totalEnabled >= 5 then
+            print("• Attachment aktif tugas pertama 5 proximity")
+            targetPrinterName = "Print_1"
+            targetPos = PrinterCoordinates["Print_1"]
+            local printerModel = ComputersFolder:FindFirstChild("Print_1")
+            targetPrompt = printerModel and printerModel:FindFirstChildOfClass("ProximityPrompt", true)
+        else
+            print("• Attachment nonaktif di oper ke deteksi proximity")
+            -- Cari printer mana yang ProximityPrompt-nya beneran aktif satuan
+            for i = 1, 5 do
+                local pName = "Print_" .. i
+                local printerModel = ComputersFolder:FindFirstChild(pName)
+                if printerModel then
+                    local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
+                    if prompt and prompt.Enabled then
+                        targetPrinterName = pName
+                        targetPos = PrinterCoordinates[pName]
+                        targetPrompt = prompt
+                        break
+                    end
+                end
+            end
+        end
+
+        if targetPos and targetPrinterName then
+            print("[Keren Hub] Menuju ke target: " .. targetPrinterName)
+            
             local path = PathfindingService:CreatePath({
                 AgentRadius = 2,
                 AgentHeight = 5,
                 AgentCanJump = true
             })
 
-            path:ComputeAsync(hrp.Position, targetPos + Vector3.new(0, 0, 2))
+            path:ComputeAsync(hrp.Position, targetPos + Vector3.new(0, 0, 1.5))
             
             if path.Status == Enum.PathStatus.Success then
                 local waypoints = path:GetWaypoints()
@@ -94,21 +120,25 @@ local function walkToActivePrinter()
                 end
             else
                 humanoid:MoveTo(targetPos)
-                task.wait(2)
+                task.wait(1.5)
             end
 
-            task.wait(0.3)
+            task.wait(0.2)
             if targetPrompt and fireproximityprompt then
                 fireproximityprompt(targetPrompt)
+                print("• Semua lancar (Berhasil interaksi dengan " .. targetPrinterName .. ")")
             else
                 local printerModel = ComputersFolder:FindFirstChild(targetPrinterName)
                 if printerModel then
                     local fallbackPrompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
                     if fallbackPrompt and fireproximityprompt then
                         fireproximityprompt(fallbackPrompt)
+                        print("• Semua lancar (Fallback interaksi dengan " .. targetPrinterName .. ")")
                     end
                 end
             end
+        else
+            print("[Keren Hub] Belum ada printer tujuan aktif yang ditemukan.")
         end
     end)
 end
