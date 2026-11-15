@@ -1,5 +1,5 @@
 -- ==========================================
--- KEREN HUB - ULTIMATE OFFICE BOT (PERFECT SYNC WALKING)
+-- KEREN HUB - ULTIMATE OFFICE BOT (PROXIMITY SCANNER)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,7 +14,7 @@ local ComputersFolder = Workspace:WaitForChild("Computers")
 
 local AutoFarmActive = true
 
--- Data Koordinat Pasti Printer Sesuai Pilihan Lu
+-- Data Koordinat Pasti Printer
 local PrinterCoordinates = {
     ["Print_1"] = Vector3.new(-6008.849, 5.956, -210.805),
     ["Print_2"] = Vector3.new(-6008.840, 5.966, -224.522),
@@ -23,48 +23,50 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
-print("[Keren Hub] Ultimate Office Bot (Perfect Sync Mode) Loaded!")
+print("[Keren Hub] Ultimate Office Bot (Proximity Scanner Mode) Loaded!")
 
--- Fungsi jalan kaki presisi berdasarkan target asli dari server
-local function walkToTargetPrinter(assignedTarget)
+-- Fungsi jalan ke printer berdasarkan ProximityPrompt yang aktif
+local function walkToActivePrinter()
     pcall(function()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
-        -- 1. Berdiri / lompat dulu dari kursi kantor
+        -- 1. Berdiri / lompat dari kursi kantor
         if humanoid.SeatPart then
             humanoid.Sit = false
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             task.wait(0.6)
         end
 
-        local printerName = ""
+        print("[Keren Hub] Mencari printer dengan ProximityPrompt aktif...")
 
-        -- Terjemahkan data mentah dari server secara akurat
-        if typeof(assignedTarget) == "Instance" then
-            printerName = assignedTarget.Name
-        elseif typeof(assignedTarget) == "number" or typeof(assignedTarget) == "string" then
-            -- Kalau server ngirim angka (misal 3) atau string ("Print_3" atau "3")
-            local cleanName = tostring(assignedTarget):gsub("Print_", "")
-            printerName = "Print_" .. cleanName
+        local targetPrinterName = "Print_1"
+        local targetPos = PrinterCoordinates["Print_1"]
+        local targetPrompt = nil
+
+        -- 2. Scan Print_1 sampai Print_5 cari yang prompt-nya aktif / ada
+        for i = 1, 5 do
+            local pName = "Print_" .. i
+            local printerModel = ComputersFolder:FindFirstChild(pName)
+            if printerModel then
+                local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
+                -- Cek apakah prompt ada dan aktif (Enabled)
+                if prompt and prompt.Enabled then
+                    targetPrinterName = pName
+                    targetPos = PrinterCoordinates[pName]
+                    targetPrompt = prompt
+                    print("[Keren Hub] Ketemu target aktif di:", targetPrinterName)
+                    break
+                end
+            end
         end
-
-        local targetPos = PrinterCoordinates[printerName]
-
-        -- Jika nama printer gagal dikenali, ambil default Print_1
-        if not targetPos then
-            printerName = "Print_1"
-            targetPos = PrinterCoordinates[printerName]
-        end
-
-        print("[Keren Hub] Target Printer Valid dari Server:", printerName)
 
         if targetPos then
-            print("[Keren Hub] Berjalan kaki menuju " .. printerName .. "...")
+            print("[Keren Hub] Berjalan kaki menuju " .. targetPrinterName .. "...")
 
-            -- Buat path pakai PathfindingService biar jalan normal ada animasinya
+            -- Pathfinding buat jalan normal pakai animasi
             local path = PathfindingService:CreatePath({
                 AgentRadius = 2,
                 AgentHeight = 5,
@@ -95,21 +97,25 @@ local function walkToTargetPrinter(assignedTarget)
                     if conn then conn:Disconnect() end
                 end
             else
-                -- Fallback kalau pathfinding mentok: jalan lurus manual
                 humanoid:MoveTo(targetPos)
                 task.wait(2)
             end
 
-            -- 2. Sesampainya di printer, tekan ProximityPrompt-nya
+            -- 3. Eksekusi interaksi pakai ProximityPrompt yang ketemu
             task.wait(0.3)
-            local printerModel = ComputersFolder:FindFirstChild(printerName)
-            if printerModel then
-                local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
-                if prompt then
-                    fireproximityprompt(prompt)
+            if targetPrompt then
+                fireproximityprompt(targetPrompt)
+            else
+                -- Fallback cari prompt di model printer tersebut kalau variabelnya kelewat
+                local printerModel = ComputersFolder:FindFirstChild(targetPrinterName)
+                if printerModel then
+                    local fallbackPrompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
+                    if fallbackPrompt then
+                        fireproximityprompt(fallbackPrompt)
+                    end
                 end
             end
-            print("[Keren Hub] Berhasil interaksi dengan " .. printerName .. "!")
+            print("[Keren Hub] Selesai berinteraksi dengan " .. targetPrinterName .. "!")
         end
     end)
 end
@@ -164,7 +170,7 @@ local function solveOfficeTask()
                         end
                     end
                     
-                    print("[Keren Hub] Sukses Jawab Soal -> Jawaban: " .. targetAnswer)
+                    print("[Keren Hub] Sukses Jawab Soal -> Jawaban: " + targetAnswer)
                     task.wait(1.2)
                     break
                 end
@@ -181,10 +187,10 @@ task.spawn(function()
     end
 end)
 
--- 2. EVENT PENANGKAP PRINTER DARI SERVER (YANG UDAH PAS DETEKSINYA)
-AssignPrintJob.OnClientEvent:Connect(function(assignedTarget)
+-- 2. EVENT PENANGKAP PRINT JOB
+AssignPrintJob.OnClientEvent:Connect(function()
     if not AutoFarmActive then return end
-    print("[Keren Hub] Tugas Print diterima dari server! Target:", assignedTarget)
+    print("[Keren Hub] Tugas Print diterima! Mencari printer berdasarkan ProximityPrompt...")
     task.wait(0.5)
-    walkToTargetPrinter(assignedTarget)
+    walkToActivePrinter()
 end)
