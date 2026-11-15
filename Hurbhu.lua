@@ -1,8 +1,9 @@
 -- ==========================================
--- KEREN HUB - ULTIMATE OFFICE BOT (DEBUG SCANNER MODE)
+-- KEREN HUB - ULTIMATE OFFICE BOT (CLEAN & FINAL)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PathfindingService = game:GetService("PathfindingService")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
@@ -22,10 +23,10 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
-print("[Keren Hub] Ultimate Office Bot (Debug Scanner) Loaded!")
+print("[Keren Hub] Ultimate Office Bot Active!")
 
 -- ==========================================
-- FUNGSI JALAN & DEBUG SCANNER
+-- FUNGSI JALAN KE PRINTER (HALUS & SCAN ATTACHMENT)
 -- ==========================================
 local function walkToActivePrinter()
     pcall(function()
@@ -40,8 +41,6 @@ local function walkToActivePrinter()
             task.wait(0.6)
         end
 
-        print("[Keren Hub DEBUG] Memulai scan printer...")
-
         local targetPrinterName = nil
         local targetPos = nil
         local targetPrompt = nil
@@ -54,34 +53,62 @@ local function walkToActivePrinter()
                 local attachment = part and part:FindFirstChild("Attachment")
                 local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
 
-                -- Cetak status komponen ke F9
-                print("[Keren Hub DEBUG] " .. pName .. " -> Part:", tostring(part), "| Attachment:", tostring(attachment), "| Prompt:", tostring(prompt))
-
                 if attachment and prompt then
                     targetPrinterName = pName
                     targetPos = PrinterCoordinates[pName]
                     targetPrompt = prompt
-                    print("[Keren Hub DEBUG] -> Target valid terpilih:", targetPrinterName)
                     break
                 end
-            else
-                print("[Keren Hub DEBUG] Model " .. pName .. " tidak ditemukan di folder Computers!")
             end
         end
 
         if targetPos then
-            print("[Keren Hub] Berjalan menuju " .. targetPrinterName .. "...")
-            humanoid:MoveTo(targetPos)
-            task.wait(2) -- Tunggu karakter sampai di dekat printer
+            local path = PathfindingService:CreatePath({
+                AgentRadius = 2,
+                AgentHeight = 5,
+                AgentCanJump = true
+            })
 
+            path:ComputeAsync(hrp.Position, targetPos + Vector3.new(0, 0, 2))
+            
+            if path.Status == Enum.PathStatus.Success then
+                local waypoints = path:GetWaypoints()
+                for _, waypoint in ipairs(waypoints) do
+                    humanoid:MoveTo(waypoint.Position)
+                    if waypoint.Action == Enum.PathWaypointAction.Jump then
+                        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end
+                    
+                    local reached = false
+                    local conn
+                    conn = humanoid.MoveToFinished:Connect(function(isReached)
+                        reached = true
+                        if conn then conn:Disconnect() end
+                    end)
+                    
+                    local t = tick()
+                    while not reached and (tick() - t) < 0.8 do
+                        task.wait(0.05)
+                    end
+                    if conn then conn:Disconnect() end
+                end
+            else
+                humanoid:MoveTo(targetPos)
+                task.wait(2)
+            end
+
+            task.wait(0.3)
             if targetPrompt and fireproximityprompt then
                 fireproximityprompt(targetPrompt)
-                print("[Keren Hub] Berhasil eksekusi prompt di:", targetPrinterName)
             else
-                print("[Keren Hub] Warning: Target prompt atau fungsi fireproximityprompt tidak tersedia.")
+                local printerModel = ComputersFolder:FindFirstChild(targetPrinterName)
+                if printerModel then
+                    local fallbackPrompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
+                    if fallbackPrompt and fireproximityprompt then
+                        fireproximityprompt(fallbackPrompt)
+                    end
+                end
             end
-        else
-            print("[Keren Hub DEBUG] GAGAL: Tidak ada satupun printer yang memenuhi syarat attachment/prompt saat discan!")
         end
     end)
 end
@@ -138,7 +165,6 @@ local function solveOfficeTask()
                         end
                     end
                     
-                    print("[Keren Hub] Sukses Jawab Soal -> Jawaban:", targetAnswer)
                     task.wait(1.2)
                     break
                 end
@@ -159,9 +185,6 @@ end)
 
 AssignPrintJob.OnClientEvent:Connect(function()
     if not AutoFarmActive then return end
-    print("[Keren Hub] Tugas Print diterima! Memulai scan printer...")
     task.wait(0.5)
     walkToActivePrinter()
 end)
-
-print("[Keren Hub] Ultimate Office Bot siap memantau F9!")
