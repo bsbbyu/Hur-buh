@@ -1,34 +1,5 @@
 -- ==========================================
--- KEREN HUB - ULTIMATE OFFICE BOT (PURE PROXIMITY RESET FLOW)
--- ==========================================
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local PathfindingService = game:GetService("PathfindingService")
-local Workspace = game:GetService("Workspace")
-
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local JobEvents = ReplicatedStorage:WaitForChild("JobEvents")
-local AssignPrintJob = JobEvents:WaitForChild("AssignPrintJob")
-local ComputersFolder = Workspace:WaitForChild("Computers")
-
-local AutoFarmActive = true
-
--- Data Koordinat Pasti Printer
-local PrinterCoordinates = {
-    ["Print_1"] = Vector3.new(-6008.849, 5.956, -210.805),
-    ["Print_2"] = Vector3.new(-6008.840, 5.966, -224.522),
-    ["Print_3"] = Vector3.new(-6008.839, 5.979, -238.361),
-    ["Print_4"] = Vector3.new(-5868.426, 5.982, -213.191),
-    ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
-}
-
-print("==========================================")
-print("[Keren Hub] Ultimate Office Bot Active (Pure Proximity Mode)!")
-print("==========================================")
-
--- ==========================================
--- FUNGSI JALAN KE PRINTER (MURNI PROXIMITY)
+-- FUNGSI JALAN KE PRINTER (SCAN SETELAH BANGUN DARI KURSI)
 -- ==========================================
 local function walkToActivePrinter()
     pcall(function()
@@ -37,10 +8,11 @@ local function walkToActivePrinter()
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp or not humanoid then return end
 
+        -- 1. BERSIHKAN DARI KURSI DULU (SUPAYA POSISI VALID)
         if humanoid.SeatPart then
             humanoid.Sit = false
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            task.wait(0.6)
+            task.wait(0.8) -- Kasih jeda santai biar animasi berdiri/loncatnya kelar dulu
         end
 
         local targetPrinterName = nil
@@ -48,19 +20,28 @@ local function walkToActivePrinter()
         local targetPrompt = nil
         local activePrinters = {}
 
-        -- Scan semua printer yang ProximityPrompt-nya beneran Enabled (nyala)
-        for i = 1, 5 do
-            local pName = "Print_" .. i
-            local printerModel = ComputersFolder:FindFirstChild(pName)
-            if printerModel then
-                local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
-                if prompt and prompt.Enabled then
-                    table.insert(activePrinters, {name = pName, prompt = prompt})
+        -- 2. BARU DETEKSI PRINTER SETELAH KARAKTER BERDIRI & GAME READY
+        local attempts = 0
+        while #activePrinters == 0 and attempts < 10 do
+            attempts = attempts + 1
+            activePrinters = {}
+
+            for i = 1, 5 do
+                local pName = "Print_" .. i
+                local printerModel = ComputersFolder:FindFirstChild(pName)
+                if printerModel then
+                    local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
+                    if prompt and prompt.Enabled then
+                        table.insert(activePrinters, {name = pName, prompt = prompt})
+                    end
                 end
+            end
+
+            if #activePrinters == 0 then
+                task.wait(0.3)
             end
         end
 
-        -- Kalau ke-detect reset (banyak yang nyala), ambil printer pertama yang valid dari list yang aktif
         if #activePrinters > 0 then
             print("• Proximity aktif terdeteksi (" .. #activePrinters .. " printer menyala)")
             targetPrinterName = activePrinters[1].name
@@ -120,83 +101,7 @@ local function walkToActivePrinter()
                 end
             end
         else
-            print("[Keren Hub] Belum ada printer tujuan aktif yang ditemukan.")
+            print("[Keren Hub] Gagal mendeteksi printer aktif.")
         end
     end)
 end
-
--- ==========================================
--- FUNGSI AUTO SOLVER GUI (MATEMATIKA)
--- ==========================================
-local function solveOfficeTask()
-    pcall(function()
-        local workGui = PlayerGui:FindFirstChild("WorkGui")
-        if not workGui then return end
-
-        local questionLabel = workGui:FindFirstChild("QuestionLabel") or workGui:FindFirstChild("TextLabel")
-        if not questionLabel then return end
-
-        local rawText = questionLabel.Text
-        if not rawText or rawText == "" then return end
-
-        if not (rawText:find("%+") or rawText:find("%-")) then return end
-
-        local cleanExpr = rawText:gsub("=.*", ""):gsub("[^%d%+%-]", "")
-        local mathFunc = loadstring("return " .. cleanExpr)
-        if not mathFunc then return end
-
-        local success, result = pcall(mathFunc)
-        if not success or not result then return end
-        
-        local targetAnswer = tostring(result)
-
-        task.wait(math.random(10, 15) / 10)
-
-        local frame = workGui:FindFirstChild("Frame")
-        if not frame then return end
-
-        for _, obj in ipairs(frame:GetChildren()) do
-            if obj.Name == "AnswerButton" or obj:IsA("TextButton") then
-                local btnText = ""
-                if obj:IsA("TextButton") then
-                    btnText = obj.Text
-                else
-                    local lbl = obj:FindFirstChildOfClass("TextLabel")
-                    if lbl then btnText = lbl.Text end
-                end
-
-                local cleanBtnText = btnText:gsub("%D", "")
-
-                if cleanBtnText == targetAnswer or btnText == targetAnswer then
-                    if obj:IsA("GuiButton") then
-                        if firesignal then
-                            firesignal(obj.MouseButton1Click)
-                            firesignal(obj.Activated)
-                        else
-                            obj:Activate()
-                        end
-                    end
-                    
-                    task.wait(1.2)
-                    break
-                end
-            end
-        end
-    end)
-end
-
--- ==========================================
--- LOOP & EVENT LISTENER UTAMA
--- ==========================================
-task.spawn(function()
-    while AutoFarmActive do
-        task.wait(1)
-        solveOfficeTask()
-    end
-end)
-
-AssignPrintJob.OnClientEvent:Connect(function()
-    if not AutoFarmActive then return end
-    task.wait(0.5)
-    walkToActivePrinter()
-end)
