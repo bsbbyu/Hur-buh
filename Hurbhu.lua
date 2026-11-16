@@ -1,5 +1,5 @@
 -- ==========================================
--- KEREN HUB - ULTIMATE OFFICE BOT (STATUS LOG EDITION)
+-- KEREN HUB - ULTIMATE OFFICE BOT (PURE PROXIMITY RESET FLOW)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,12 +24,11 @@ local PrinterCoordinates = {
 }
 
 print("==========================================")
-print("[Keren Hub] Ultimate Office Bot Active!")
-print("[Keren Hub] Status: Semua sistem siap memantau.")
+print("[Keren Hub] Ultimate Office Bot Active (Pure Proximity Mode)!")
 print("==========================================")
 
 -- ==========================================
--- FUNGSI JALAN KE PRINTER (DENGAN STATUS LOG)
+-- FUNGSI JALAN KE PRINTER (MURNI PROXIMITY)
 -- ==========================================
 local function walkToActivePrinter()
     pcall(function()
@@ -47,43 +46,26 @@ local function walkToActivePrinter()
         local targetPrinterName = nil
         local targetPos = nil
         local targetPrompt = nil
-        local totalEnabled = 0
+        local activePrinters = {}
 
-        -- Hitung berapa printer yang prompt-nya Enabled (nyala)
+        -- Scan semua printer yang ProximityPrompt-nya beneran Enabled (nyala)
         for i = 1, 5 do
             local pName = "Print_" .. i
             local printerModel = ComputersFolder:FindFirstChild(pName)
             if printerModel then
                 local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
                 if prompt and prompt.Enabled then
-                    totalEnabled = totalEnabled + 1
+                    table.insert(activePrinters, {name = pName, prompt = prompt})
                 end
             end
         end
 
-        -- LOGIKA STATUS:
-        if totalEnabled >= 5 then
-            print("• Attachment aktif tugas pertama 5 proximity")
-            targetPrinterName = "Print_1"
-            targetPos = PrinterCoordinates["Print_1"]
-            local printerModel = ComputersFolder:FindFirstChild("Print_1")
-            targetPrompt = printerModel and printerModel:FindFirstChildOfClass("ProximityPrompt", true)
-        else
-            print("• Attachment nonaktif di oper ke deteksi proximity")
-            -- Cari printer mana yang ProximityPrompt-nya beneran aktif satuan
-            for i = 1, 5 do
-                local pName = "Print_" .. i
-                local printerModel = ComputersFolder:FindFirstChild(pName)
-                if printerModel then
-                    local prompt = printerModel:FindFirstChildOfClass("ProximityPrompt", true)
-                    if prompt and prompt.Enabled then
-                        targetPrinterName = pName
-                        targetPos = PrinterCoordinates[pName]
-                        targetPrompt = prompt
-                        break
-                    end
-                end
-            end
+        -- Kalau ke-detect reset (banyak yang nyala), ambil printer pertama yang valid dari list yang aktif
+        if #activePrinters > 0 then
+            print("• Proximity aktif terdeteksi (" .. #activePrinters .. " printer menyala)")
+            targetPrinterName = activePrinters[1].name
+            targetPos = PrinterCoordinates[targetPrinterName]
+            targetPrompt = activePrinters[1].prompt
         end
 
         if targetPos and targetPrinterName then
