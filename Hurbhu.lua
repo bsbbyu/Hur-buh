@@ -1,9 +1,8 @@
 -- ==========================================
--- KEREN HUB - ULTIMATE OFFICE BOT (FIXED DETECTION)
+-- KEREN HUB - ULTIMATE OFFICE BOT (FULL SMOOTH & IGNORE LOW WALLS)
 -- ==========================================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local PathfindingService = game:GetService("PathfindingService")
 local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
@@ -24,13 +23,13 @@ local PrinterCoordinates = {
 }
 
 print("==========================================")
-print("[Keren Hub] Ultimate Office Bot Active (Fixed Mode)!")
+print("[Keren Hub] Ultimate Office Bot Active (No Low-Wall Stutter Mode)!")
 print("==========================================")
 
 -- ==========================================
--- FUNGSI UTAMA: DETEKSI & JALAN KE PRINTER
+-- FUNGSI JALAN LANGSUNG (CUEK BABLAS TEMBOK RENDAH)
 -- ==========================================
-local function walkToActivePrinter()
+local function walkDirectIgnoreLowWalls(printerName)
     pcall(function()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -41,15 +40,55 @@ local function walkToActivePrinter()
         if humanoid.SeatPart then
             humanoid.Sit = false
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            task.wait(1)
+            task.wait(0.6)
         end
 
+        local targetPos = PrinterCoordinates[printerName]
+        local printerModel = ComputersFolder:FindFirstChild(printerName)
+        local targetPrompt = printerModel and printerModel:FindFirstChildOfClass("ProximityPrompt", true)
+
+        if targetPos then
+            print("[Keren Hub] Jalan lurus bablas ke " .. printerName)
+            
+            local destination = targetPos + Vector3.new(0, 0, 2)
+            
+            -- Set state humanoid ke berjalan bebas langsung ke tujuan tanpa waypoint
+            humanoid:MoveTo(destination)
+            
+            -- Loop pemantau: paksa arahkan pandangan/gerakan lurus ke tujuan tanpa takut tembok rendah
+            local startTime = tick()
+            while (hrp.Position - destination).Magnitude > 3 and (tick() - startTime) < 8 do
+                if humanoid.MoveDirection.Magnitude == 0 then
+                    humanoid:MoveTo(destination)
+                end
+                
+                -- Jaga rotasi hadap tetap lurus ke target printer
+                local lookAtPos = Vector3.new(destination.X, hrp.Position.Y, destination.Z)
+                hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(hrp.Position, lookAtPos), 0.1)
+                
+                task.wait(0.05)
+            end
+
+            task.wait(0.2)
+            if targetPrompt and fireproximityprompt then
+                fireproximityprompt(targetPrompt)
+                print("[Keren Hub] Berhasil interaksi dengan " .. printerName)
+            else
+                print("[Keren Hub] Warning: Gagal mengeksekusi fireproximityprompt.")
+            end
+        end
+    end)
+end
+
+-- ==========================================
+-- FUNGSI UTAMA: DETEKSI & JALAN KE PRINTER AKTIF
+-- ==========================================
+local function walkToActivePrinter()
+    pcall(function()
         local targetPrinterName = nil
-        local targetPos = nil
-        local targetPrompt = nil
         local foundActive = false
 
-        -- 2. Sistem Polling / Retry Deteksi (Memastikan server game sudah siapin status prompt)
+        -- Sistem Polling / Retry Deteksi (Memastikan server game sudah siapin status prompt)
         local attempts = 0
         while not foundActive and attempts < 15 do
             attempts = attempts + 1
@@ -60,11 +99,8 @@ local function walkToActivePrinter()
                 
                 if printerModel then
                     local isPromptEnabled = false
-                    local foundPrompt = nil
-
                     for _, descendant in ipairs(printerModel:GetDescendants()) do
                         if descendant:IsA("ProximityPrompt") then
-                            foundPrompt = descendant
                             if descendant.Enabled then
                                 isPromptEnabled = true
                             end
@@ -73,10 +109,8 @@ local function walkToActivePrinter()
                     end
 
                     -- Ambil printer pertama yang status prompt-nya aktif (Enabled = true)
-                    if isPromptEnabled and foundPrompt then
+                    if isPromptEnabled then
                         targetPrinterName = pName
-                        targetPos = PrinterCoordinates[pName]
-                        targetPrompt = foundPrompt
                         foundActive = true
                         break
                     end
@@ -84,55 +118,14 @@ local function walkToActivePrinter()
             end
 
             if not foundActive then
-                task.wait(0.4) -- Coba scan ulang kalau status belum siap
+                task.wait(0.4)
             end
         end
 
-        -- 3. Eksekusi Perjalanan jika Tujuan Ditemukan
-        if targetPos and targetPrinterName then
+        -- Eksekusi Jalan Bablas jika Tujuan Ditemukan
+        if targetPrinterName then
             print("[Keren Hub] Menuju ke tujuan aktif: " .. targetPrinterName)
-            
-            local path = PathfindingService:CreatePath({
-                AgentRadius = 2,
-                AgentHeight = 5,
-                AgentCanJump = true
-            })
-
-            path:ComputeAsync(hrp.Position, targetPos + Vector3.new(0, 0, 1.5))
-            
-            if path.Status == Enum.PathStatus.Success then
-                local waypoints = path:GetWaypoints()
-                for _, waypoint in ipairs(waypoints) do
-                    humanoid:MoveTo(waypoint.Position)
-                    if waypoint.Action == Enum.PathWaypointAction.Jump then
-                        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    end
-                    
-                    local reached = false
-                    local conn
-                    conn = humanoid.MoveToFinished:Connect(function(isReached)
-                        reached = true
-                        if conn then conn:Disconnect() end
-                    end)
-                    
-                    local t = tick()
-                    while not reached and (tick() - t) < 0.8 do
-                        task.wait(0.05)
-                    end
-                    if conn then conn:Disconnect() end
-                end
-            else
-                humanoid:MoveTo(targetPos)
-                task.wait(1.5)
-            end
-
-            task.wait(0.3)
-            if targetPrompt and fireproximityprompt then
-                fireproximityprompt(targetPrompt)
-                print("• Semua lancar (Berhasil interaksi dengan " .. targetPrinterName .. ")")
-            else
-                print("[Keren Hub] Warning: Gagal mengeksekusi fireproximityprompt.")
-            end
+            walkDirectIgnoreLowWalls(targetPrinterName)
         else
             print("[Keren Hub] Gagal mendeteksi tujuan printer aktif (Waktu tunggu habis).")
         end
@@ -181,7 +174,7 @@ local function solveOfficeTask()
 
                 local cleanBtnText = btnText:gsub("%D", "")
 
-                if cleanBtnText == targetAnswer or btnTest == targetAnswer then
+                if cleanBtnText == targetAnswer or btnText == targetAnswer then
                     if obj:IsA("GuiButton") then
                         if firesignal then
                             firesignal(obj.MouseButton1Click)
