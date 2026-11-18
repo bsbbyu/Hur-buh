@@ -1,5 +1,5 @@
 -- ==========================================
--- TEST SCRIPT: KELAR SOAL -> JALAN KE KURSI PRINTER TERDEKAT
+-- TEST SCRIPT: JALAN KE PRINTER -> AUTO SOLVE -> JUMP -> JALAN BALIK KE KURSI
 -- ==========================================
 local Players = game:GetService("Players")
 local PathfindingService = game:GetService("PathfindingService")
@@ -17,7 +17,6 @@ local PrinterCoordinates = {
     ["Print_5"] = Vector3.new(-5868.429, 5.956, -249.965),
 }
 
--- Tabel kursi spesifik masing-masing printer
 local PrinterSeats = {
     ["Print_1"] = Vector3.new(-5968.743, 4.643, -228.440),
     ["Print_2"] = Vector3.new(-5968.743, 4.643, -228.440),
@@ -26,7 +25,7 @@ local PrinterSeats = {
     ["Print_5"] = Vector3.new(-5880.500, 4.643, -261.013),
 }
 
--- Fungsi jalan kaki pakai Pathfinding
+-- Fungsi Jalan Kaki dengan Fallback Cerdas
 local function walkToPosition(targetPos)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -64,27 +63,74 @@ local function walkToPosition(targetPos)
         end
     else
         humanoid:MoveTo(targetPos)
-        task.wait(2)
+        task.wait(1.5)
     end
 end
 
--- Fungsi Utama Test Sesuai Arahan Lu
+-- Fungsi Auto-Solve Soal Math di WorkGui
+local function solveOfficeTask()
+    local workGui = PlayerGui:FindFirstChild("WorkGui")
+    if not workGui then return end
+
+    local questionLabel = workGui:FindFirstChild("QuestionLabel") or workGui:FindFirstChild("TextLabel")
+    if not questionLabel then return end
+
+    local rawText = questionLabel.Text
+    if not rawText or rawText == "" then return end
+
+    if not (rawText:find("%+") or rawText:find("%-")) then return end
+
+    local cleanExpr = rawText:gsub("=.*", ""):gsub("[^%d%+%-]", "")
+    local mathFunc = loadstring("return " .. cleanExpr)
+    if not mathFunc then return end
+
+    local success, result = pcall(mathFunc)
+    if not success or not result then return end
+    
+    local targetAnswer = tostring(result)
+    task.wait(math.random(5, 10) / 10)
+
+    local frame = workGui:FindFirstChild("Frame")
+    if not frame then return end
+
+    for _, obj in ipairs(frame:GetChildren()) do
+        if obj.Name == "AnswerButton" or obj:IsA("TextButton") then
+            local btnText = obj:IsA("TextButton") and obj.Text or (obj:FindFirstChildOfClass("TextLabel") and obj:FindFirstChildOfClass("TextLabel").Text or "")
+            local cleanBtnText = btnText:gsub("%D", "")
+
+            if cleanBtnText == targetAnswer or btnText == targetAnswer then
+                if obj:IsA("GuiButton") then
+                    if firesignal then
+                        firesignal(obj.MouseButton1Click)
+                        firesignal(obj.Activated)
+                    else
+                        obj:Activate()
+                    end
+                end
+                task.wait(1.0)
+                break
+            end
+        end
+    end
+end
+
+-- Siklus Tes Utama
 local function runTestCycle(testPrinterName)
     print("[TEST] Memulai siklus untuk: " .. testPrinterName)
     local targetPos = PrinterCoordinates[testPrinterName]
     local targetSeat = PrinterSeats[testPrinterName]
 
     if not targetPos or not targetSeat then
-        print("[TEST] Koordinat printer/kursi tidak ditemukan!")
+        print("[TEST] Koordinat tidak valid!")
         return
     end
 
     -- 1. Jalan kaki ke printer target
-    print("[TEST] Berjalan ke " .. testPrinterName)
+    print("[TEST] Berjalan kaki menuju " .. testPrinterName)
     walkToPosition(targetPos + Vector3.new(0, 0, 1.5))
-    task.wait(0.5)
+    task.wait(0.3)
 
-    -- Cari dan pencet proximity prompt printer kalau ada
+    -- 2. Klik proximity prompt printer
     local printerModel = ComputersFolder:FindFirstChild(testPrinterName)
     if printerModel then
         for _, desc in ipairs(printerModel:GetDescendants()) do
@@ -95,9 +141,8 @@ local function runTestCycle(testPrinterName)
         end
     end
 
-    print("[TEST] Menunggu WorkGui (soal math) muncul dan dikerjakan...")
-
-    -- 2. Tunggu WorkGui muncul lalu tunggu sampai selesai dijawab (hilang)
+    -- 3. Tunggu WorkGui muncul lalu auto-solve sampai selesai
+    print("[TEST] Menunggu soal math muncul...")
     local startTime = tick()
     local guiFound = false
     
@@ -110,31 +155,41 @@ local function runTestCycle(testPrinterName)
     end
 
     if guiFound then
-        -- Tunggu sampai soal selesai / WorkGui tertutup sendiri
+        print("[TEST] WorkGui ditemukan, mulai mengerjakan soal...")
         while PlayerGui:FindFirstChild("WorkGui") do
-            task.wait(0.2)
+            solveOfficeTask()
+            task.wait(0.5)
         end
-        print("[TEST] Soal math selesai dikerjakan!")
+        print("[TEST] Soal math selesai!")
     else
-        print("[TEST] WorkGui tidak muncul, langsung lanjut jalan...")
+        print("[TEST] WorkGui tidak muncul, lanjut...")
     end
 
-    task.wait(0.8) -- Jeda transisi aman
+    task.wait(0.5)
 
-    -- 3. Jalan kaki balik ke kursi printer tersebut
-    print("[TEST] Berjalan kaki kembali ke kursi untuk " .. testPrinterName)
+    -- 4. Lompat (Jump fix) biar karakternya fresh
+    local char = LocalPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.Sit = false
+        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        print("[TEST] Lompat (Jump fix)!")
+        task.wait(0.6)
+    end
+
+    -- 5. Jalan kaki balik ke kursi printer tersebut
+    print("[TEST] Berjalan kaki kembali ke kursi " .. testPrinterName)
     walkToPosition(targetSeat)
 
     -- Sampai di kursi, duduk manis
     task.wait(0.3)
-    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     if humanoid then
         humanoid.Sit = true
     end
-    print("[TEST] Siklus tes selesai! Berhasil duduk di kursi " .. testPrinterName)
+    print("[TEST] Selesai! Berhasil duduk di kursi " .. testPrinterName)
 end
 
--- CONTOH EKSEKUSI: Tes langsung ke Print_3 (bisa diganti Print_1 s.d Print_5)
+-- CONTOH EKSEKUSI TES: Langsung tes ke Print_3 (bisa diganti Print_1 s.d. Print_5)
 task.spawn(function()
     runTestCycle("Print_3")
 end)
