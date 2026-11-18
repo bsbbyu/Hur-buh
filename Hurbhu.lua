@@ -167,14 +167,22 @@ local function runTestCycle(testPrinterName)
 
     task.wait(0.5)
 
-    -- 4. Lompat (Jump fix) biar karakternya fresh
+        -- 4. Paksa lepas duduk / lock state, lalu Lompat (Jump fix)
     local char = LocalPlayer.Character
     local humanoid = char and char:FindFirstChildOfClass("Humanoid")
     if humanoid then
         humanoid.Sit = false
+        humanoid.PlatformStand = false -- Lepas kuncian physics
+        task.wait(0.1)
+        
+        -- Paksa lempar state loncat beruntun biar merespons
         humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        print("[TEST] Lompat (Jump fix)!")
-        task.wait(0.6)
+        task.wait(0.2)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+        humanoid.Jump = true -- Trigger properti jump bawaan roblox
+        
+        print("[TEST] Paksa lompat (Jump fix)!")
+        task.wait(0.8)
     end
 
     -- 5. Jalan kaki balik ke kursi printer tersebut
